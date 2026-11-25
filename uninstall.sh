@@ -32,6 +32,7 @@ fi
 [ -w /dev/cpuctl/top-app/cpu.uclamp.latency_sensitive ] && echo 0 > /dev/cpuctl/top-app/cpu.uclamp.latency_sensitive 2>/dev/null
 
 pm uninstall com.z9cn.gamecube.monsterplus >/dev/null 2>&1
+rm -f /data/adb/gamecube_z9.conf
 
 settings delete secure autovrs_support 2>/dev/null
 settings put global vaa_whitelist_apps "" 2>/dev/null

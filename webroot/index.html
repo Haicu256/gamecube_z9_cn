@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>GameCube Z9 CN v1.1</title>
+<style>
+  :root {
+    --bg: #0d1017;
+    --card: #161b26;
+    --card-border: #252d3d;
+    --text: #eef2f8;
+    --muted: #8b96ab;
+    --accent: #f5b942;
+    --accent-dim: rgba(245, 185, 66, 0.16);
+    --green: #3ddc97;
+    --red: #ff6b6b;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    padding: 16px 14px 40px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.4;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .title { font-size: 20px; font-weight: 700; letter-spacing: 0.2px; }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(245, 185, 66, 0.35);
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .stat {
+    background: #10141d;
+    border: 1px solid #202838;
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .stat-k { font-size: 11px; color: var(--muted); }
+  .stat-v { font-size: 13px; font-weight: 700; margin-top: 2px; word-break: break-word; }
+  .ok { color: var(--green); }
+  .warn { color: var(--red); }
+  .games-box {
+    font-size: 12px;
+    color: var(--muted);
+    background: #10141d;
+    border: 1px solid #202838;
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    word-break: break-all;
+  }
+  .games-box strong { color: var(--text); }
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .btn {
+    border: 1px solid var(--card-border);
+    background: #1d2433;
+    color: var(--text);
+    border-radius: 11px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+  }
+  .btn:active { opacity: 0.75; }
+  .btn-primary {
+    background: var(--accent);
+    color: #14110a;
+    border-color: var(--accent);
+  }
+  .btn-full { grid-column: 1 / -1; }
+  .btn-attn {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(245, 185, 66, 0.35);
+  }
+  .restart-hint {
+    font-size: 12px;
+    color: var(--accent);
+    margin-top: 9px;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-top: 1px solid #202736;
+  }
+  .row:first-of-type { border-top: none; padding-top: 2px; }
+  .row:last-of-type { padding-bottom: 2px; }
+  .row-info { flex: 1; min-width: 0; }
+  .row-name { font-size: 14px; font-weight: 600; }
+  .row-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .switch {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    flex-shrink: 0;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: #2b3447;
+    border-radius: 999px;
+    transition: 0.18s ease;
+    cursor: pointer;
+  }
+  .slider::before {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 3px;
+    top: 3px;
+    background: #d5dce8;
+    border-radius: 50%;
+    transition: 0.18s ease;
+  }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before {
+    transform: translateX(20px);
+    background: #14110a;
+  }
+  .switch input:disabled + .slider { opacity: 0.45; }
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    text-align: center;
+  }
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%) translateY(110px);
+    background: #232b3d;
+    color: var(--text);
+    border: 1px solid #35405a;
+    padding: 10px 16px;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    transition: transform 0.2s ease;
+    z-index: 99;
+    max-width: calc(100vw - 28px);
+    text-align: center;
+    line-height: 1.35;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">GameCube Z9 CN</div>
+    <span class="badge" id="verBadge">v1.1</span>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Trạng thái hệ thống</div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-k">Thiết bị</div>
+        <div class="stat-v" id="stModel">...</div>
+      </div>
+      <div class="stat">
+        <div class="stat-k">APK Monster+</div>
+        <div class="stat-v" id="stApk">...</div>
+      </div>
+      <div class="stat">
+        <div class="stat-k">Skin KPL</div>
+        <div class="stat-v" id="stKpl">...</div>
+      </div>
+    </div>
+    <div class="games-box">
+      <strong>Game trong Game Space:</strong> <span id="stGames">Đang tải...</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnSync">Đồng bộ Game Space</button>
+      <button class="btn" id="btnRestart">Khởi động lại GameCube</button>
+      <button class="btn btn-full" id="btnReset">Khôi phục cài đặt mặc định</button>
+    </div>
+    <div class="restart-hint" id="restartHint">
+      Hãy bấm <strong>Khởi động lại GameCube</strong> để áp dụng cài đặt sau khi bật/tắt chức năng.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Đồ họa &amp; Hiệu năng GPU / CPU</div>
+    <div id="grpPerf"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Tính năng Game Space</div>
+    <div id="grpSpace"></div>
+  </div>
+
+  <div class="note">
+    0 tiến trình chạy ngầm · An toàn với thermal_killer_z9<br />
+    Mẹo: Một số thay đổi prop cần bấm "Khởi động lại GameCube" để giao diện cập nhật.
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CTL = "/data/adb/modules/gamecube_z9_cn/gc_ctl.sh";
+  var cbSeq = 0;
+  var busy = false;
+
+  var PERF_ITEMS = [
+    { key: "ENABLE_VAA", name: "VAA (Khử răng cưa vivo)", desc: "Làm mịn viền game qua GLES/Vulkan. Tắt để giảm nhẹ tải GPU." },
+    { key: "ENABLE_VSR", name: "VSR (Siêu độ phân giải mềm)", desc: "Làm nét hậu kỳ khung hình 720p. Tắt để GPU nhẹ tải tối đa." },
+    { key: "ENABLE_AUTOVRS", name: "AutoVRS (Giảm nét rìa GPU)", desc: "Khuyên TẮT: tiết kiệm GPU nhẹ nhưng hay làm mờ vùng rìa hình." },
+    { key: "ENABLE_GPU_DRIVER", name: "GPU Tuner + Driver Prerelease", desc: "Dùng driver đồ họa game chính hãng Qualcomm (/vendor) cho mọi game." },
+    { key: "ENABLE_PERF_LIST", name: "Đồng bộ perf_game_list", desc: "Đưa game VN/quốc tế trong Game Space vào danh sách hiệu năng ROM CN." },
+    { key: "ENABLE_WALT_LATENCY", name: "WALT Latency (Ưu tiên độ trễ)", desc: "Giảm khựng 1% low FPS trên CPU mà không khóa xung khi nghỉ." },
+    { key: "ENABLE_TOUCH_OPT", name: "Touch Opt (Tối ưu cảm ứng)", desc: "Bật sys.game.touch.opt.enable tinh chỉnh độ nhạy cảm ứng game." }
+  ];
+
+  var SPACE_ITEMS = [
+    { key: "ENABLE_BYPASS_CHARGE", name: "Sạc nhánh (Bypass Charging)", desc: "Mở công tắc cấp nguồn trực tiếp khi chơi game." },
+    { key: "ENABLE_AUDIO", name: "Âm thanh game & Spatializer", desc: "Bật hiệu ứng âm thanh tùy chỉnh và không gian trong game." },
+    { key: "ENABLE_FPS_MONSTER", name: "Hiện FPS, Monster+ & Skin KPL", desc: "Giữ prop nền hiển thị FPS, KPL, VivoSync & G2M." }
+  ];
+
+  var toastTimer = null;
+  function toast(msg, ms) {
+    var el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove("show"); }, ms || 2800);
+  }
+
+  function markNeedRestart(need) {
+    var btn = document.getElementById("btnRestart");
+    if (btn) btn.classList.toggle("btn-attn", !!need);
+  }
+
+  function exec(cmd) {
+    return new Promise(function (resolve, reject) {
+      if (typeof ksu === "undefined" || !ksu || typeof ksu.exec !== "function") {
+        reject(new Error("Chỉ chạy trong KernelSU WebUI"));
+        return;
+      }
+      var cb = "__gc_cb_" + (++cbSeq) + "_" + Date.now();
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) {
+          done = true;
+          try { delete window[cb]; } catch (e) {}
+          reject(new Error("Hết thời gian chờ lệnh"));
+        }
+      }, 10000);
+
+      window[cb] = function (code, stdout, stderr) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { delete window[cb]; } catch (e) {}
+        resolve({
+          code: typeof code === "number" ? code : parseInt(code, 10) || 0,
+          stdout: stdout == null ? "" : String(stdout),
+          stderr: stderr == null ? "" : String(stderr)
+        });
+      };
+
+      try {
+        ksu.exec(cmd, "{}", cb);
+      } catch (e1) {
+        try {
+          ksu.exec(cmd, cb);
+        } catch (e2) {
+          done = true;
+          clearTimeout(timer);
+          try { delete window[cb]; } catch (e) {}
+          reject(e2);
+        }
+      }
+    });
+  }
+
+  function renderGroup(containerId, items) {
+    var box = document.getElementById(containerId);
+    box.innerHTML = "";
+    items.forEach(function (it) {
+      var row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML =
+        '<div class="row-info">' +
+          '<div class="row-name">' + it.name + '</div>' +
+          '<div class="row-desc">' + it.desc + '</div>' +
+        '</div>' +
+        '<label class="switch">' +
+          '<input type="checkbox" id="sw_' + it.key + '" data-key="' + it.key + '" />' +
+          '<span class="slider"></span>' +
+        '</label>';
+      box.appendChild(row);
+    });
+  }
+
+  function setDisabled(flag) {
+    busy = flag;
+    var inputs = document.querySelectorAll('input[type="checkbox"], button');
+    for (var i = 0; i < inputs.length; i++) inputs[i].disabled = flag;
+  }
+
+  function applyState(data) {
+    if (!data || !data.cfg) return;
+    document.getElementById("verBadge").textContent = data.version || "v1.1";
+    document.getElementById("stModel").textContent = data.model || "V2361A";
+    var apkEl = document.getElementById("stApk");
+    apkEl.textContent = data.apkInstalled ? "Đã cài" : "Chưa cài";
+    apkEl.className = "stat-v " + (data.apkInstalled ? "ok" : "warn");
+    document.getElementById("stKpl").textContent = (data.kplFiles || 0) + " file";
+    document.getElementById("stGames").textContent = data.games ? data.games : "(chưa có game nào)";
+
+    Object.keys(data.cfg).forEach(function (k) {
+      var sw = document.getElementById("sw_" + k);
+      if (sw) sw.checked = Number(data.cfg[k]) === 1;
+    });
+  }
+
+  function parseJson(stdout) {
+    var lines = (stdout || "").trim().split("\n");
+    for (var i = lines.length - 1; i >= 0; i--) {
+      var s = lines[i].trim();
+      if (s.charAt(0) === "{") return JSON.parse(s);
+    }
+    throw new Error("Không đọc được JSON trạng thái");
+  }
+
+  function runCtl(args, okMsg) {
+    setDisabled(true);
+    return exec("sh " + CTL + " " + args).then(function (r) {
+      if (r.code !== 0) throw new Error(r.stderr || r.stdout || ("Exit " + r.code));
+      var data = parseJson(r.stdout);
+      applyState(data);
+      if (okMsg) toast(okMsg);
+    }).catch(function (err) {
+      toast("Lỗi: " + (err && err.message ? err.message : err));
+    }).finally(function () {
+      setDisabled(false);
+    });
+  }
+
+  renderGroup("grpPerf", PERF_ITEMS);
+  renderGroup("grpSpace", SPACE_ITEMS);
+
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (!t || !t.dataset || !t.dataset.key || busy) return;
+    var k = t.dataset.key;
+    var v = t.checked ? "1" : "0";
+    var label = k.replace("ENABLE_", "");
+    markNeedRestart(true);
+    runCtl(
+      "set " + k + " " + v,
+      (v === "1" ? "Đã BẬT " : "Đã TẮT ") + label + " — hãy khởi động lại GameCube để áp dụng cài đặt"
+    );
+  });
+
+  document.getElementById("btnSync").addEventListener("click", function () {
+    if (!busy) {
+      markNeedRestart(true);
+      runCtl("sync", "Đã đồng bộ Game Space — hãy khởi động lại GameCube để áp dụng");
+    }
+  });
+
+  document.getElementById("btnRestart").addEventListener("click", function () {
+    if (busy) return;
+    setDisabled(true);
+    exec("sh " + CTL + " restart_gc").then(function () {
+      markNeedRestart(false);
+      toast("Đã khởi động lại GameCube và áp dụng cài đặt!", 2400);
+    }).catch(function (err) {
+      toast("Lỗi: " + err.message);
+    }).finally(function () {
+      setDisabled(false);
+    });
+  });
+
+  document.getElementById("btnReset").addEventListener("click", function () {
+    if (!busy) {
+      markNeedRestart(true);
+      runCtl("reset", "Đã khôi phục mặc định — hãy khởi động lại GameCube để áp dụng");
+    }
+  });
+
+  runCtl("status");
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 id=gamecube_z9_cn
-name=gamecube_z9(CN)_v1.0
-version=v1.0
-versionCode=100
+name=gamecube_z9(CN)_v1.1
+version=v1.1
+versionCode=110
 author=Custom Pure Build for iQOO Z9 CN (V2361A / PD2361)
-description=Mở khóa full Game Space cho iQOO Z9 CN: tự cài APK LSPosed Monster+ (13KB), Skin KPL, Đấu giải, Hiện FPS, Sạc nhánh, VivoSync/G2M, Audio Spatializer, VAA/VSR mềm (tắt AutoVRS), Touch Opt, đồng bộ perf_game_list + GPU Driver Prerelease + GPUTUNER & WALT latency_sensitive. Không xung đột thermal_killer_z9.
+description=Mở khóa full Game Space cho iQOO Z9 CN kèm WebUI bật/tắt từng tính năng: tự cài APK LSPosed Monster+ & Đấu giải (13KB), Skin KPL, Hiện FPS, Sạc nhánh, Audio Spatializer, VAA/VSR mềm, AutoVRS, Touch Opt, đồng bộ perf_game_list + GPU Driver Prerelease + GPUTUNER & WALT latency. Không xung đột thermal_killer_z9.

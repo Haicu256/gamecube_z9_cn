@@ -1,8 +1,8 @@
-# gamecube_z9(CN)_v1.0
+# gamecube_z9(CN)_v1.1
 
-Pure, zero-bloat **KernelSU + LSPosed** Game Space module built specifically for **vivo iQOO Z9 CN (`V2361A` / `PD2361` / Snapdragon 7 Gen 3 `SM7550` / OriginOS 5)**.
+Pure, zero-bloat **KernelSU (with built-in WebUI) + LSPosed** Game Space module built specifically for **vivo iQOO Z9 CN (`V2361A` / `PD2361` / Snapdragon 7 Gen 3 `SM7550` / OriginOS 5)**.
 
-Module mở khóa toàn diện **Game Space (Siêu trò chơi)** tối ưu riêng cho **iQOO Z9 CN (`V2361A` / `PD2361` / OriginOS 5)** — giữ 100% tính năng hoạt động thật, xóa sạch tính năng Q2 ảo và không xung đột với [`thermal_killer_z9_cn`](https://github.com/Haicu256/thermal_killer_z9_cn).
+Module mở khóa toàn diện **Game Space (Siêu trò chơi)** kèm **WebUI bật/tắt từng tính năng trực quan** tối ưu riêng cho **iQOO Z9 CN (`V2361A` / `PD2361` / OriginOS 5)** — giữ 100% tính năng hoạt động thật, xóa sạch tính năng Q2 ảo và không xung đột với [`thermal_killer_z9_cn`](https://github.com/Haicu256/thermal_killer_z9_cn).
 
 ---
 
@@ -26,7 +26,7 @@ Module mở khóa toàn diện **Game Space (Siêu trò chơi)** tối ưu riên
 - **Sạc nhánh (Bypass Charging):** `persist.vivo.game_bypass_charge_support=1` & `persist.vivo.all_bypass_charge_support=1`.
 - **Hiển thị FPS & Monster+ nền:** `persist.vivo.gamecube.support_fps=1`, `ro.vivo.support_monster_plus=true`, `ro.vivo.support_monster_plus_combine=true`.
 - **VivoSync, G2M & Âm thanh game Spatializer:** Bật đủ bộ prop hỗ trợ thực tế trên ROM Z9 CN.
-- **VAA / VSR mềm & Tắt AutoVRS gây mờ viền:** Bật `sys.game.vsr.pp.enable=1` + `sys.game.vaa.*=1`, đồng thời ép `autovrs_support=0` để tránh giảm độ nét vùng rìa trên Adreno 720.
+- **VAA / VSR mềm & AutoVRS (tích hợp công tắc WebUI):** Mặc định **TẮT** cả VAA, VSR và AutoVRS để GPU nhẹ tải và hình sắc nét tự nhiên nhất; có thể bật/tắt tức thì bất cứ lúc nào trong **WebUI của KernelSU**.
 - **Tối ưu cảm ứng game:** Bật `sys.game.touch.opt.enable=1` (tận dụng `ro.vivo.touch.game_para_adjust=1` có sẵn trên máy).
 - **Scheduler WALT ưu tiên độ trễ:** Bật `/dev/cpuctl/top-app/cpu.uclamp.latency_sensitive = 1` (tăng độ mượt 1% low FPS mà không khóa xung khi nghỉ).
 - **Adreno GPU Tuner:** Bật `GPUTUNER_SWITCH=true`.
@@ -50,7 +50,7 @@ Module mở khóa toàn diện **Game Space (Siêu trò chơi)** tối ưu riên
 
 ### 3. Hướng dẫn cài đặt & sử dụng
 1. Gỡ các module/APK Game Space cũ nếu có (tránh trùng hook vào `com.vivo.gamecube`).
-2. Tải **`gamecube_z9(CN)_v1.0.zip`** trong mục [Releases](https://github.com/Haicu256/gamecube_z9_cn/releases/tag/v1.0) và flash trong **KernelSU Manager** → **Soft Reboot**.
+2. Tải **`gamecube_z9(CN)_v1.0.zip`** trong mục [Releases](https://github.com/Haicu256/gamecube_z9_cn/releases/latest) và flash trong **KernelSU Manager** → **Soft Reboot**.
 3. Mở **LSPosed Manager → Mô-đun → bật `GameCube Z9 Monster+`** (scope: **`com.vivo.gamecube`**) → buộc dừng `GameCube` (hoặc Soft Reboot thêm 1 lần).
 4. **Khi thêm game mới vào Game Space:** Mở KernelSU Manager bấm nút **Action** của `gamecube_z9(CN)_v1.0` để đồng bộ ngay game mới vào `perf_game_list`, `GPU Driver Prerelease`, `VAA/VSR` (hoặc đợi lần khởi động lại sau).
 5. **Gỡ bỏ:** Gỡ module trong KernelSU Manager → `uninstall.sh` tự gỡ APK `GameCube Z9 Monster+`, trả lại `perf_game_list`, `updatable_driver_prerelease_opt_in_apps`, `autovrs_support`, `WALT latency_sensitive` và xóa sạch các prop đã thêm.
@@ -68,7 +68,8 @@ Module mở khóa toàn diện **Game Space (Siêu trò chơi)** tối ưu riên
 - **KernelSU System Layer (`system.prop` + `service.sh` + `action.sh`):**
   - Full **KPL Skin** (`393` assets mounted safely under `/system/etc/gamecube/res/skin/kpl`) + both `perist.vivo.gamecube.kpl.support=1` (matching vivo's literal prop spelling in `GameCube.apk`) and `persist.vivo.gamecube.kpl.support=1`.
   - **Bypass Charging** (`game_bypass_charge_support=1`, `all_bypass_charge_support=1`), **FPS Overlay** (`support_fps=1`), **Monster+** flags, **VivoSync / G2M**, and **Game Audio Spatializer**.
-  - **Software VAA / VSR** enabled while explicitly **disabling `autovrs_support=0`** (avoids blurry Variable Rate Shading edges).
+  - **Built-in KernelSU WebUI (`webroot/index.html`):** Toggle every feature live (persisted in `/data/adb/gamecube_z9.conf`) with one-tap Game Space sync, GameCube restart, and reset to defaults.
+  - **Software VAA / VSR & AutoVRS:** All **OFF by default** for maximum GPU headroom and crisp native rendering; toggleable anytime from KernelSU WebUI.
   - **Game Touch Optimization** (`sys.game.touch.opt.enable=1`), **Adreno GPU Tuner** (`GPUTUNER_SWITCH=true`), and **WALT foreground latency priority** (`/dev/cpuctl/top-app/cpu.uclamp.latency_sensitive=1`).
   - **Dynamic Game Space Auto-Sync** via native `content://com.vivo.gamecube.provider/support_game` (zero `sqlite3` dependency): automatically syncs every game you add in Game Space into `perf_game_list` (fixing missing international/VN games on CN ROM), Qualcomm's stock `/vendor` Prerelease GPU Driver (`updatable_driver_prerelease_opt_in_apps`), `vaa_whitelist_apps`, and `vsr_whitelist_apps`.
 - **Bundled Micro LSPosed APK (`GameCube Z9 Monster+` v1.1 — `12.7 KB`):**

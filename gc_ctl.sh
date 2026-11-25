@@ -1,0 +1,312 @@
+#!/system/bin/sh
+# gamecube_z9(CN)_v1.1 - Config & WebUI backend controller
+# Zero background daemon; persists toggles in /data/adb/gamecube_z9.conf
+
+MODDIR="${0%/*}"
+CONF="/data/adb/gamecube_z9.conf"
+
+# Default feature toggles (1=ON, 0=OFF)
+ENABLE_VAA=0
+ENABLE_VSR=0
+ENABLE_AUTOVRS=0
+ENABLE_TOUCH_OPT=1
+ENABLE_WALT_LATENCY=1
+ENABLE_GPU_DRIVER=1
+ENABLE_PERF_LIST=1
+ENABLE_AUDIO=1
+ENABLE_BYPASS_CHARGE=1
+ENABLE_FPS_MONSTER=1
+
+load_conf() {
+    [ -f "$CONF" ] && . "$CONF" 2>/dev/null
+}
+
+save_conf() {
+    cat << EOF > "$CONF"
+ENABLE_VAA=$ENABLE_VAA
+ENABLE_VSR=$ENABLE_VSR
+ENABLE_AUTOVRS=$ENABLE_AUTOVRS
+ENABLE_TOUCH_OPT=$ENABLE_TOUCH_OPT
+ENABLE_WALT_LATENCY=$ENABLE_WALT_LATENCY
+ENABLE_GPU_DRIVER=$ENABLE_GPU_DRIVER
+ENABLE_PERF_LIST=$ENABLE_PERF_LIST
+ENABLE_AUDIO=$ENABLE_AUDIO
+ENABLE_BYPASS_CHARGE=$ENABLE_BYPASS_CHARGE
+ENABLE_FPS_MONSTER=$ENABLE_FPS_MONSTER
+EOF
+    chmod 0644 "$CONF" 2>/dev/null
+}
+
+collect_games() {
+    _raw=""
+
+    _cp_pkgs=$(content query --uri content://com.vivo.gamecube.provider/support_game --projection package_name 2>/dev/null \
+        | sed -n 's/.*package_name=\([a-zA-Z0-9_][a-zA-Z0-9_.]*\).*/\1/p')
+    _raw="$_raw $_cp_pkgs"
+
+    for _val in \
+        "$(settings get system pem_ddc_open_game_list 2>/dev/null)" \
+        "$(settings get system vivo_sync_game_switch_status 2>/dev/null)" \
+        "$(settings get global picture_stability_opt_whitelist_apps 2>/dev/null)"; do
+        [ -z "$_val" ] || [ "$_val" = "null" ] && continue
+        _pkgs=$(printf '%s\n' "$_val" | tr ':;,#\\' '\n' | grep -E '^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+){1,}$')
+        _raw="$_raw $_pkgs"
+    done
+
+    _out=""
+    for _p in $_raw; do
+        case " $_out " in
+            *" $_p "*) continue ;;
+        esac
+        if [ -d "/data/data/$_p" ]; then
+            _out="$_out $_p"
+        fi
+    done
+    printf '%s\n' "$_out"
+}
+
+apply_all() {
+    load_conf
+    [ -f "$CONF" ] || save_conf
+
+    if command -v resetprop >/dev/null 2>&1; then
+        # KPL skin + VivoSync/G2M + Monster+/FPS
+        if [ "$ENABLE_FPS_MONSTER" = "1" ]; then
+            resetprop -n ro.vivo.support_monster_plus true
+            resetprop -n ro.vivo.support_monster_plus_combine true
+            resetprop -n persist.vivo.gamecube.support_fps 1
+            resetprop -n perist.vivo.gamecube.kpl.support 1
+            resetprop -n persist.vivo.gamecube.kpl.support 1
+            resetprop -n persist.sys.supportvivosync 1
+            resetprop -n persist.sys.support.g2m 1
+        else
+            resetprop -n persist.vivo.gamecube.support_fps 0
+        fi
+
+        # Bypass Charging
+        if [ "$ENABLE_BYPASS_CHARGE" = "1" ]; then
+            resetprop -n persist.vivo.game_bypass_charge_support 1
+            resetprop -n persist.vivo.all_bypass_charge_support 1
+        else
+            resetprop -n persist.vivo.game_bypass_charge_support 0
+            resetprop -n persist.vivo.all_bypass_charge_support 0
+        fi
+
+        # Game Audio & Spatializer
+        if [ "$ENABLE_AUDIO" = "1" ]; then
+            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect.enable true
+            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable true
+            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable true
+        else
+            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect.enable false
+            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable false
+            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable false
+        fi
+
+        # VAA (vivo Anti-Aliasing)
+        if [ "$ENABLE_VAA" = "1" ]; then
+            resetprop -n sys.game.vaa.gles.enable 1
+            resetprop -n sys.game.vaa.vivo.enable 1
+            resetprop -n sys.game.vaa.vulkan.enable 1
+        else
+            resetprop -n sys.game.vaa.gles.enable 0
+            resetprop -n sys.game.vaa.vivo.enable 0
+            resetprop -n sys.game.vaa.vulkan.enable 0
+        fi
+
+        # VSR (Software Super Resolution post-processing)
+        if [ "$ENABLE_VSR" = "1" ]; then
+            resetprop -n sys.game.vsr.pp.enable 1
+        else
+            resetprop -n sys.game.vsr.pp.enable 0
+        fi
+
+        # Game Touch Optimization
+        if [ "$ENABLE_TOUCH_OPT" = "1" ]; then
+            resetprop -n sys.game.touch.opt.enable 1
+        else
+            resetprop -n sys.game.touch.opt.enable 0
+        fi
+    fi
+
+    # AutoVRS (Variable Rate Shading)
+    if [ "$ENABLE_AUTOVRS" = "1" ]; then
+        settings put secure autovrs_support 1 2>/dev/null
+    else
+        settings put secure autovrs_support 0 2>/dev/null
+    fi
+
+    # Clear unused XPQ conflict list
+    settings put global xpq_conflict_list_apps "" 2>/dev/null
+
+    # WALT top-app latency_sensitive
+    if [ -w /dev/cpuctl/top-app/cpu.uclamp.latency_sensitive ]; then
+        if [ "$ENABLE_WALT_LATENCY" = "1" ]; then
+            echo 1 > /dev/cpuctl/top-app/cpu.uclamp.latency_sensitive 2>/dev/null
+        else
+            echo 0 > /dev/cpuctl/top-app/cpu.uclamp.latency_sensitive 2>/dev/null
+        fi
+    fi
+
+    _games=$(collect_games)
+
+    # VAA whitelist
+    if [ "$ENABLE_VAA" = "1" ] && [ -n "$_games" ]; then
+        _new=""
+        for _pkg in $_games; do
+            if [ -n "$_new" ]; then _new="${_new};${_pkg}"; else _new="$_pkg"; fi
+        done
+        settings put global vaa_whitelist_apps "$_new" 2>/dev/null
+    else
+        settings put global vaa_whitelist_apps "" 2>/dev/null
+    fi
+
+    # VSR whitelist
+    if [ "$ENABLE_VSR" = "1" ] && [ -n "$_games" ]; then
+        _new=""
+        for _pkg in $_games; do
+            if [ -n "$_new" ]; then _new="${_new};${_pkg}"; else _new="$_pkg"; fi
+        done
+        settings put global vsr_whitelist_apps "$_new" 2>/dev/null
+    else
+        settings put global vsr_whitelist_apps "" 2>/dev/null
+    fi
+
+    # GPU Tuner + Stock Qualcomm Prerelease GPU Driver
+    if [ "$ENABLE_GPU_DRIVER" = "1" ]; then
+        settings put global GPUTUNER_SWITCH true 2>/dev/null
+        if [ -n "$(getprop ro.gfx.driver.1 2>/dev/null)" ] && [ -n "$_games" ]; then
+            if [ ! -f /data/adb/.gamecube_z9_gfx_driver.bak ]; then
+                _orig_drv=$(settings get global updatable_driver_prerelease_opt_in_apps 2>/dev/null | tr -d '\r\n')
+                [ "$_orig_drv" = "null" ] && _orig_drv=""
+                printf '%s\n' "$_orig_drv" > /data/adb/.gamecube_z9_gfx_driver.bak 2>/dev/null
+            fi
+            _drv_new=""
+            for _pkg in $_games; do
+                if [ -n "$_drv_new" ]; then _drv_new="${_drv_new},${_pkg}"; else _drv_new="$_pkg"; fi
+            done
+            settings put global updatable_driver_prerelease_opt_in_apps "$_drv_new" 2>/dev/null
+        fi
+    else
+        settings put global GPUTUNER_SWITCH false 2>/dev/null
+        if [ -f /data/adb/.gamecube_z9_gfx_driver.bak ]; then
+            _orig_drv=$(cat /data/adb/.gamecube_z9_gfx_driver.bak 2>/dev/null | tr -d '\r\n')
+            settings put global updatable_driver_prerelease_opt_in_apps "$_orig_drv" 2>/dev/null
+        else
+            settings put global updatable_driver_prerelease_opt_in_apps "" 2>/dev/null
+        fi
+    fi
+
+    # vivo perf_game_list sync
+    _perf_cur=$(settings get system perf_game_list 2>/dev/null | tr -d '\r\n')
+    if [ -n "$_perf_cur" ] && [ "$_perf_cur" != "null" ]; then
+        if [ ! -f /data/adb/.gamecube_z9_perf_game_list.bak ]; then
+            printf '%s\n' "$_perf_cur" > /data/adb/.gamecube_z9_perf_game_list.bak 2>/dev/null
+        fi
+        _perf_base=$(cat /data/adb/.gamecube_z9_perf_game_list.bak 2>/dev/null | tr -d '\r\n')
+        [ -z "$_perf_base" ] && _perf_base="$_perf_cur"
+        if [ "$ENABLE_PERF_LIST" = "1" ] && [ -n "$_games" ]; then
+            _perf_new="$_perf_base"
+            for _pkg in $_games; do
+                case ":$_perf_new:" in
+                    *":$_pkg:"*) ;;
+                    *)
+                        case "$_perf_new" in
+                            *:) _perf_new="${_perf_new}${_pkg}:" ;;
+                            *)  _perf_new="${_perf_new}:${_pkg}:" ;;
+                        esac
+                        ;;
+                esac
+            done
+            [ "$_perf_new" != "$_perf_cur" ] && settings put system perf_game_list "$_perf_new" 2>/dev/null
+        else
+            [ "$_perf_base" != "$_perf_cur" ] && settings put system perf_game_list "$_perf_base" 2>/dev/null
+        fi
+    fi
+
+    # Ensure bundled Monster+/Esports LSPosed APK is installed
+    _apk="$MODDIR/apk/GameCubeZ9MonsterPlus.apk"
+    if [ -f "$_apk" ] && ! pm path com.z9cn.gamecube.monsterplus >/dev/null 2>&1; then
+        pm install -r "$_apk" >/dev/null 2>&1
+    fi
+}
+
+emit_json() {
+    load_conf
+    _model=$(getprop ro.product.model 2>/dev/null | tr -d '\r\n"')
+    _apk_ok=0
+    pm path com.z9cn.gamecube.monsterplus >/dev/null 2>&1 && _apk_ok=1
+    _kpl_cnt=$(ls /system/etc/gamecube/res/skin/kpl 2>/dev/null | wc -l | tr -d ' ')
+    _games=$(collect_games | tr '\n' ' ' | sed 's/^ *//;s/ *$//')
+    _walt=$(cat /dev/cpuctl/top-app/cpu.uclamp.latency_sensitive 2>/dev/null | tr -d '\r\n')
+    [ -z "$_walt" ] && _walt=0
+    _autovrs=$(settings get secure autovrs_support 2>/dev/null | tr -d '\r\n')
+    [ -z "$_autovrs" ] || [ "$_autovrs" = "null" ] && _autovrs=0
+    _vaa_wl=$(settings get global vaa_whitelist_apps 2>/dev/null | tr -d '\r\n"')
+    [ "$_vaa_wl" = "null" ] && _vaa_wl=""
+    _vsr_wl=$(settings get global vsr_whitelist_apps 2>/dev/null | tr -d '\r\n"')
+    [ "$_vsr_wl" = "null" ] && _vsr_wl=""
+    _drv_wl=$(settings get global updatable_driver_prerelease_opt_in_apps 2>/dev/null | tr -d '\r\n"')
+    [ "$_drv_wl" = "null" ] && _drv_wl=""
+
+    printf '{"version":"v1.1","model":"%s","apkInstalled":%s,"kplFiles":%s,"games":"%s","waltLive":%s,"autovrsLive":%s,"vaaList":"%s","vsrList":"%s","drvList":"%s","cfg":{"ENABLE_VAA":%s,"ENABLE_VSR":%s,"ENABLE_AUTOVRS":%s,"ENABLE_TOUCH_OPT":%s,"ENABLE_WALT_LATENCY":%s,"ENABLE_GPU_DRIVER":%s,"ENABLE_PERF_LIST":%s,"ENABLE_AUDIO":%s,"ENABLE_BYPASS_CHARGE":%s,"ENABLE_FPS_MONSTER":%s}}\n' \
+        "$_model" "$_apk_ok" "${_kpl_cnt:-0}" "$_games" "$_walt" "$_autovrs" "$_vaa_wl" "$_vsr_wl" "$_drv_wl" \
+        "$ENABLE_VAA" "$ENABLE_VSR" "$ENABLE_AUTOVRS" "$ENABLE_TOUCH_OPT" "$ENABLE_WALT_LATENCY" \
+        "$ENABLE_GPU_DRIVER" "$ENABLE_PERF_LIST" "$ENABLE_AUDIO" "$ENABLE_BYPASS_CHARGE" "$ENABLE_FPS_MONSTER"
+}
+
+case "$1" in
+    status)
+        emit_json
+        ;;
+    apply|sync)
+        apply_all
+        emit_json
+        ;;
+    set)
+        load_conf
+        _k="$2"
+        _v="$3"
+        case "$_v" in
+            0|1) ;;
+            *) echo '{"error":"invalid_value"}'; exit 1 ;;
+        esac
+        case "$_k" in
+            ENABLE_VAA|ENABLE_VSR|ENABLE_AUTOVRS|ENABLE_TOUCH_OPT|ENABLE_WALT_LATENCY|ENABLE_GPU_DRIVER|ENABLE_PERF_LIST|ENABLE_AUDIO|ENABLE_BYPASS_CHARGE|ENABLE_FPS_MONSTER)
+                eval "$_k=$_v"
+                save_conf
+                apply_all
+                emit_json
+                ;;
+            *)
+                echo '{"error":"unknown_key"}'
+                exit 1
+                ;;
+        esac
+        ;;
+    restart_gc)
+        am force-stop com.vivo.gamecube 2>/dev/null
+        echo '{"ok":true}'
+        ;;
+    reset)
+        rm -f "$CONF"
+        ENABLE_VAA=0
+        ENABLE_VSR=0
+        ENABLE_AUTOVRS=0
+        ENABLE_TOUCH_OPT=1
+        ENABLE_WALT_LATENCY=1
+        ENABLE_GPU_DRIVER=1
+        ENABLE_PERF_LIST=1
+        ENABLE_AUDIO=1
+        ENABLE_BYPASS_CHARGE=1
+        ENABLE_FPS_MONSTER=1
+        save_conf
+        apply_all
+        emit_json
+        ;;
+    *)
+        echo "Usage: $0 {status|apply|sync|set <KEY> <0|1>|restart_gc|reset}"
+        exit 1
+        ;;
+esac
+exit 0

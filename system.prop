@@ -24,11 +24,11 @@ persist.vivo.audio.feature.game_custom_sound_effect.enable=true
 persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable=true
 persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable=true
 
-# Software VSR & VAA (verified in V2361A GameCube.apk; AutoVRS disabled in service.sh)
-sys.game.vsr.pp.enable=1
-sys.game.vaa.gles.enable=1
-sys.game.vaa.vivo.enable=1
-sys.game.vaa.vulkan.enable=1
+# Software VSR & VAA (OFF by default for max GPU headroom; toggleable in KernelSU WebUI)
+sys.game.vsr.pp.enable=0
+sys.game.vaa.gles.enable=0
+sys.game.vaa.vivo.enable=0
+sys.game.vaa.vulkan.enable=0
 
 # Game Touch Optimization (V2361A has ro.vivo.touch.game_para_adjust=1)
 sys.game.touch.opt.enable=1
