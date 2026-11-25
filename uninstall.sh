@@ -34,6 +34,14 @@ fi
 pm uninstall com.z9cn.gamecube.monsterplus >/dev/null 2>&1
 rm -f /data/adb/gamecube_z9.conf
 
+# Restore stock GPU/CPU floors if thermal_killer_z9 is not managing them
+if [ ! -f /data/adb/modules/vivo_iqoo_thermal_killer/.daemon.lock ] || [ -f /data/adb/modules/vivo_iqoo_thermal_killer/toggle_off ]; then
+    [ -e /sys/class/kgsl/kgsl-3d0/min_pwrlevel ] && echo 7 > /sys/class/kgsl/kgsl-3d0/min_pwrlevel 2>/dev/null
+    [ -e /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq ] && echo 614400 > /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq 2>/dev/null
+    [ -e /sys/devices/system/cpu/cpufreq/policy4/scaling_min_freq ] && echo 652800 > /sys/devices/system/cpu/cpufreq/policy4/scaling_min_freq 2>/dev/null
+    [ -e /sys/devices/system/cpu/cpufreq/policy7/scaling_min_freq ] && echo 652800 > /sys/devices/system/cpu/cpufreq/policy7/scaling_min_freq 2>/dev/null
+fi
+
 settings delete secure autovrs_support 2>/dev/null
 settings put global vaa_whitelist_apps "" 2>/dev/null
 settings put global vsr_whitelist_apps "" 2>/dev/null

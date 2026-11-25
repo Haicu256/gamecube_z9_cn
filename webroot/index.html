@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>GameCube Z9 CN v1.1</title>
+<title>GameCube Z9 CN v1.2</title>
 <style>
   :root {
     --bg: #0d1017;
@@ -163,6 +163,56 @@
     background: #14110a;
   }
   .switch input:disabled + .slider { opacity: 0.45; }
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .section-head .section-title { margin: 0; }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid #2b3447;
+    background: #10141d;
+    color: var(--muted);
+  }
+  .pill.linked {
+    color: var(--green);
+    border-color: rgba(61, 220, 151, 0.35);
+    background: rgba(61, 220, 151, 0.1);
+  }
+  .hw-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    background: #10141d;
+    border: 1px solid #202838;
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+  }
+  .hw-bar strong { color: var(--text); }
+  .btn-mini {
+    border: 1px solid var(--card-border);
+    background: #1d2433;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-mini:active { opacity: 0.75; }
+  .switch.danger input:checked + .slider { background: var(--red); }
+  .switch.danger input:checked + .slider::before { background: #1a0b0b; }
   .note {
     font-size: 12px;
     color: var(--muted);
@@ -194,7 +244,7 @@
 <body>
   <div class="header">
     <div class="title">GameCube Z9 CN</div>
-    <span class="badge" id="verBadge">v1.1</span>
+    <span class="badge" id="verBadge">v1.2</span>
   </div>
 
   <div class="card">
@@ -227,6 +277,18 @@
   </div>
 
   <div class="card">
+    <div class="section-head">
+      <div class="section-title">Giữ xung trần GPU / CPU</div>
+      <span class="pill" id="tkBadge">Đang quét...</span>
+    </div>
+    <div class="hw-bar">
+      <div id="hwReadout">Đang quét xung thực tế...</div>
+      <button class="btn-mini" id="btnRescan">Quét lại</button>
+    </div>
+    <div id="grpClock"></div>
+  </div>
+
+  <div class="card">
     <div class="section-title">Đồ họa &amp; Hiệu năng GPU / CPU</div>
     <div id="grpPerf"></div>
   </div>
@@ -250,6 +312,11 @@
   var CTL = "/data/adb/modules/gamecube_z9_cn/gc_ctl.sh";
   var cbSeq = 0;
   var busy = false;
+
+  var CLOCK_ITEMS = [
+    { key: "LOCK_GPU_MAX", danger: true, name: "Khóa trần GPU (975 MHz)", desc: "Giữ sàn min_pwrlevel=0 (tốn pin/nóng hơn). Áp dụng tức thì, tự đồng bộ thermal_killer_z9." },
+    { key: "LOCK_CPU_MAX", danger: true, name: "Khóa trần CPU (1.80 / 2.40 / 2.63 GHz)", desc: "Giữ sàn 3 cụm CPU ở mức trần (khuyên dùng kèm sò lạnh). Áp dụng tức thì." }
+  ];
 
   var PERF_ITEMS = [
     { key: "ENABLE_VAA", name: "VAA (Khử răng cưa vivo)", desc: "Làm mịn viền game qua GLES/Vulkan. Tắt để giảm nhẹ tải GPU." },
@@ -335,7 +402,7 @@
           '<div class="row-name">' + it.name + '</div>' +
           '<div class="row-desc">' + it.desc + '</div>' +
         '</div>' +
-        '<label class="switch">' +
+        '<label class="switch' + (it.danger ? ' danger' : '') + '">' +
           '<input type="checkbox" id="sw_' + it.key + '" data-key="' + it.key + '" />' +
           '<span class="slider"></span>' +
         '</label>';
@@ -349,15 +416,36 @@
     for (var i = 0; i < inputs.length; i++) inputs[i].disabled = flag;
   }
 
+  function fmtGhz(khz) {
+    return (Number(khz || 0) / 1000000).toFixed(2);
+  }
+
   function applyState(data) {
     if (!data || !data.cfg) return;
-    document.getElementById("verBadge").textContent = data.version || "v1.1";
+    document.getElementById("verBadge").textContent = data.version || "v1.2";
     document.getElementById("stModel").textContent = data.model || "V2361A";
     var apkEl = document.getElementById("stApk");
     apkEl.textContent = data.apkInstalled ? "Đã cài" : "Chưa cài";
     apkEl.className = "stat-v " + (data.apkInstalled ? "ok" : "warn");
     document.getElementById("stKpl").textContent = (data.kplFiles || 0) + " file";
     document.getElementById("stGames").textContent = data.games ? data.games : "(chưa có game nào)";
+
+    var tkEl = document.getElementById("tkBadge");
+    if (tkEl) {
+      if (Number(data.tkLinked) === 1) {
+        tkEl.textContent = "Đồng bộ thermal_killer_z9";
+        tkEl.className = "pill linked";
+      } else {
+        tkEl.textContent = "Chế độ độc lập (/sys)";
+        tkEl.className = "pill";
+      }
+    }
+    var hwEl = document.getElementById("hwReadout");
+    if (hwEl && data.hw) {
+      hwEl.innerHTML =
+        "<strong>GPU:</strong> " + (data.hw.gpuCur || 0) + "/" + (data.hw.gpuMax || 975) + " MHz · " +
+        "<strong>CPU:</strong> " + fmtGhz(data.hw.p0) + " / " + fmtGhz(data.hw.p4) + " / " + fmtGhz(data.hw.p7) + " GHz";
+    }
 
     Object.keys(data.cfg).forEach(function (k) {
       var sw = document.getElementById("sw_" + k);
@@ -388,6 +476,7 @@
     });
   }
 
+  renderGroup("grpClock", CLOCK_ITEMS);
   renderGroup("grpPerf", PERF_ITEMS);
   renderGroup("grpSpace", SPACE_ITEMS);
 
@@ -396,12 +485,27 @@
     if (!t || !t.dataset || !t.dataset.key || busy) return;
     var k = t.dataset.key;
     var v = t.checked ? "1" : "0";
+    if (k === "LOCK_GPU_MAX" || k === "LOCK_CPU_MAX") {
+      var nm = k === "LOCK_GPU_MAX" ? "khóa trần GPU" : "khóa trần CPU";
+      runCtl("set " + k + " " + v, (v === "1" ? "Đã BẬT " : "Đã TẮT ") + nm + " tức thì!");
+      return;
+    }
     var label = k.replace("ENABLE_", "");
     markNeedRestart(true);
     runCtl(
       "set " + k + " " + v,
       (v === "1" ? "Đã BẬT " : "Đã TẮT ") + label + " — hãy khởi động lại GameCube để áp dụng cài đặt"
     );
+  });
+
+  document.getElementById("btnRescan").addEventListener("click", function () {
+    if (!busy) runCtl("status", "Đã quét lại trạng thái phần cứng!");
+  });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && !busy) {
+      runCtl("status");
+    }
   });
 
   document.getElementById("btnSync").addEventListener("click", function () {

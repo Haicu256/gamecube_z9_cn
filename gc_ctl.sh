@@ -1,9 +1,14 @@
 #!/system/bin/sh
-# gamecube_z9(CN)_v1.1 - Config & WebUI backend controller
+# gamecube_z9(CN)_v1.2 - Config & WebUI backend controller
 # Zero background daemon; persists toggles in /data/adb/gamecube_z9.conf
+# Live hardware clock scan + seamless bridge to thermal_killer_z9 when active
 
 MODDIR="${0%/*}"
 CONF="/data/adb/gamecube_z9.conf"
+TK_DIR="/data/adb/modules/vivo_iqoo_thermal_killer"
+TK_CTL="$TK_DIR/tk_ctl.sh"
+TK_LOCK="$TK_DIR/.daemon.lock"
+TK_FLAG="$TK_DIR/toggle_off"
 
 # Default feature toggles (1=ON, 0=OFF)
 ENABLE_VAA=0
@@ -231,6 +236,67 @@ apply_all() {
     fi
 }
 
+tk_running() {
+    [ -x "$TK_CTL" ] || [ -f "$TK_CTL" ] || return 1
+    [ -f "$TK_FLAG" ] && return 1
+    [ -f "$TK_LOCK" ] || return 1
+    _tkp=$(cat "$TK_LOCK" 2>/dev/null)
+    [ -n "$_tkp" ] || return 1
+    kill -0 "$_tkp" 2>/dev/null || return 1
+    tr '\0' ' ' < "/proc/$_tkp/cmdline" 2>/dev/null | grep -q vivo_iqoo_thermal_killer
+}
+
+set_gpu_lock() {
+    _val="$1"
+    if tk_running; then
+        if [ "$_val" = "1" ]; then
+            sh "$TK_CTL" set gpu_lock_max on >/dev/null 2>&1
+        else
+            sh "$TK_CTL" set gpu_lock_max off >/dev/null 2>&1
+        fi
+        return 0
+    fi
+    _node="/sys/class/kgsl/kgsl-3d0/min_pwrlevel"
+    [ -e "$_node" ] || return 0
+    chmod 0644 "$_node" 2>/dev/null
+    if [ "$_val" = "1" ]; then
+        printf '0\n' > "$_node" 2>/dev/null
+    else
+        _np=$(cat /sys/class/kgsl/kgsl-3d0/num_pwrlevels 2>/dev/null | tr -dc '0-9')
+        _stk=7
+        if [ -n "$_np" ] && [ "$_np" -gt 1 ]; then _stk=$((_np - 1)); fi
+        printf '%s\n' "$_stk" > "$_node" 2>/dev/null
+        [ -f "$TK_DIR/gpu_lock_max" ] && printf 'off\n' > "$TK_DIR/gpu_lock_max" 2>/dev/null
+    fi
+}
+
+set_cpu_lock() {
+    _val="$1"
+    if tk_running; then
+        if [ "$_val" = "1" ]; then
+            sh "$TK_CTL" set cpu_lock_max on >/dev/null 2>&1
+        else
+            sh "$TK_CTL" set cpu_lock_max off >/dev/null 2>&1
+        fi
+        return 0
+    fi
+    if [ "$_val" = "1" ]; then
+        for _idx in 0 4 7; do
+            _mx=$(cat "/sys/devices/system/cpu/cpufreq/policy$_idx/cpuinfo_max_freq" 2>/dev/null | tr -dc '0-9')
+            _sn="/sys/devices/system/cpu/cpufreq/policy$_idx/scaling_min_freq"
+            [ -n "$_mx" ] && [ -e "$_sn" ] && { chmod 0644 "$_sn" 2>/dev/null; printf '%s\n' "$_mx" > "$_sn" 2>/dev/null; }
+        done
+    else
+        for _pair in "0:614400" "4:652800" "7:652800"; do
+            _idx=${_pair%:*}
+            _mn=${_pair#*:}
+            _sn="/sys/devices/system/cpu/cpufreq/policy$_idx/scaling_min_freq"
+            [ -e "$_sn" ] && { chmod 0644 "$_sn" 2>/dev/null; printf '%s\n' "$_mn" > "$_sn" 2>/dev/null; }
+        done
+        [ -f "$TK_DIR/cpu_lock_max" ] && printf 'off\n' > "$TK_DIR/cpu_lock_max" 2>/dev/null
+    fi
+}
+
 emit_json() {
     load_conf
     _model=$(getprop ro.product.model 2>/dev/null | tr -d '\r\n"')
@@ -249,10 +315,35 @@ emit_json() {
     _drv_wl=$(settings get global updatable_driver_prerelease_opt_in_apps 2>/dev/null | tr -d '\r\n"')
     [ "$_drv_wl" = "null" ] && _drv_wl=""
 
-    printf '{"version":"v1.1","model":"%s","apkInstalled":%s,"kplFiles":%s,"games":"%s","waltLive":%s,"autovrsLive":%s,"vaaList":"%s","vsrList":"%s","drvList":"%s","cfg":{"ENABLE_VAA":%s,"ENABLE_VSR":%s,"ENABLE_AUTOVRS":%s,"ENABLE_TOUCH_OPT":%s,"ENABLE_WALT_LATENCY":%s,"ENABLE_GPU_DRIVER":%s,"ENABLE_PERF_LIST":%s,"ENABLE_AUDIO":%s,"ENABLE_BYPASS_CHARGE":%s,"ENABLE_FPS_MONSTER":%s}}\n' \
+    # Live hardware scan for GPU / CPU ceiling locks
+    _tk_linked=0
+    tk_running && _tk_linked=1
+    _gmin=$(cat /sys/class/kgsl/kgsl-3d0/min_pwrlevel 2>/dev/null | tr -dc '0-9')
+    _gcur=$(cat /sys/class/kgsl/kgsl-3d0/clock_mhz 2>/dev/null | tr -dc '0-9')
+    _gmax=$(cat /sys/class/kgsl/kgsl-3d0/max_clock_mhz 2>/dev/null | tr -dc '0-9')
+    _gpu_locked=0
+    [ "$_gmin" = "0" ] && _gpu_locked=1
+
+    _p0c=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq 2>/dev/null | tr -dc '0-9')
+    _p4c=$(cat /sys/devices/system/cpu/cpufreq/policy4/scaling_cur_freq 2>/dev/null | tr -dc '0-9')
+    _p7c=$(cat /sys/devices/system/cpu/cpufreq/policy7/scaling_cur_freq 2>/dev/null | tr -dc '0-9')
+    _p0n=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq 2>/dev/null | tr -dc '0-9')
+    _p4n=$(cat /sys/devices/system/cpu/cpufreq/policy4/scaling_min_freq 2>/dev/null | tr -dc '0-9')
+    _p7n=$(cat /sys/devices/system/cpu/cpufreq/policy7/scaling_min_freq 2>/dev/null | tr -dc '0-9')
+    _p0x=$(cat /sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq 2>/dev/null | tr -dc '0-9')
+    _p4x=$(cat /sys/devices/system/cpu/cpufreq/policy4/cpuinfo_max_freq 2>/dev/null | tr -dc '0-9')
+    _p7x=$(cat /sys/devices/system/cpu/cpufreq/policy7/cpuinfo_max_freq 2>/dev/null | tr -dc '0-9')
+    _cpu_locked=0
+    if [ -n "$_p0x" ] && [ "$_p0n" = "$_p0x" ] && [ "$_p4n" = "$_p4x" ] && [ "$_p7n" = "$_p7x" ]; then
+        _cpu_locked=1
+    fi
+
+    printf '{"version":"v1.2","model":"%s","apkInstalled":%s,"kplFiles":%s,"games":"%s","waltLive":%s,"autovrsLive":%s,"vaaList":"%s","vsrList":"%s","drvList":"%s","tkLinked":%s,"hw":{"gpuLocked":%s,"cpuLocked":%s,"gpuCur":%s,"gpuMax":%s,"p0":%s,"p4":%s,"p7":%s},"cfg":{"ENABLE_VAA":%s,"ENABLE_VSR":%s,"ENABLE_AUTOVRS":%s,"ENABLE_TOUCH_OPT":%s,"ENABLE_WALT_LATENCY":%s,"ENABLE_GPU_DRIVER":%s,"ENABLE_PERF_LIST":%s,"ENABLE_AUDIO":%s,"ENABLE_BYPASS_CHARGE":%s,"ENABLE_FPS_MONSTER":%s,"LOCK_GPU_MAX":%s,"LOCK_CPU_MAX":%s}}\n' \
         "$_model" "$_apk_ok" "${_kpl_cnt:-0}" "$_games" "$_walt" "$_autovrs" "$_vaa_wl" "$_vsr_wl" "$_drv_wl" \
+        "$_tk_linked" "$_gpu_locked" "$_cpu_locked" "${_gcur:-0}" "${_gmax:-975}" "${_p0c:-0}" "${_p4c:-0}" "${_p7c:-0}" \
         "$ENABLE_VAA" "$ENABLE_VSR" "$ENABLE_AUTOVRS" "$ENABLE_TOUCH_OPT" "$ENABLE_WALT_LATENCY" \
-        "$ENABLE_GPU_DRIVER" "$ENABLE_PERF_LIST" "$ENABLE_AUDIO" "$ENABLE_BYPASS_CHARGE" "$ENABLE_FPS_MONSTER"
+        "$ENABLE_GPU_DRIVER" "$ENABLE_PERF_LIST" "$ENABLE_AUDIO" "$ENABLE_BYPASS_CHARGE" "$ENABLE_FPS_MONSTER" \
+        "$_gpu_locked" "$_cpu_locked"
 }
 
 case "$1" in
@@ -272,6 +363,14 @@ case "$1" in
             *) echo '{"error":"invalid_value"}'; exit 1 ;;
         esac
         case "$_k" in
+            LOCK_GPU_MAX)
+                set_gpu_lock "$_v"
+                emit_json
+                ;;
+            LOCK_CPU_MAX)
+                set_cpu_lock "$_v"
+                emit_json
+                ;;
             ENABLE_VAA|ENABLE_VSR|ENABLE_AUTOVRS|ENABLE_TOUCH_OPT|ENABLE_WALT_LATENCY|ENABLE_GPU_DRIVER|ENABLE_PERF_LIST|ENABLE_AUDIO|ENABLE_BYPASS_CHARGE|ENABLE_FPS_MONSTER)
                 eval "$_k=$_v"
                 save_conf
@@ -302,6 +401,8 @@ case "$1" in
         ENABLE_FPS_MONSTER=1
         save_conf
         apply_all
+        set_gpu_lock 0
+        set_cpu_lock 0
         emit_json
         ;;
     *)

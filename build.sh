@@ -2,7 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-OUT="gamecube_z9(CN)_v1.1.zip"
+OUT="gamecube_z9(CN)_v1.2.zip"
 rm -f "$OUT"
 
 chmod 0755 customize.sh gc_ctl.sh service.sh action.sh uninstall.sh META-INF/com/google/android/update-binary
