@@ -1,0 +1,34 @@
+# iQOO Z9 CN (V2361A / PD2361 / OriginOS 5) - Verified GameCube Props Only
+# Zero Q2/MEMC/XPQ/Camera dead props, zero thermal conflict with thermal_killer_z9
+
+# Monster+ & FPS support
+ro.vivo.support_monster_plus=true
+ro.vivo.support_monster_plus_combine=true
+persist.vivo.gamecube.support_fps=1
+
+# KPL Skin & Esports Mode (/system/etc/gamecube/res/skin/kpl)
+# Note: GameCube.apk on V2361A literally reads "perist.vivo.gamecube.kpl.support" (vivo typo)
+perist.vivo.gamecube.kpl.support=1
+persist.vivo.gamecube.kpl.support=1
+
+# Bypass Charging (Sạc nhánh)
+persist.vivo.game_bypass_charge_support=1
+persist.vivo.all_bypass_charge_support=1
+
+# VivoSync & G2M
+persist.sys.supportvivosync=1
+persist.sys.support.g2m=1
+
+# Game Audio Effects & Spatializer
+persist.vivo.audio.feature.game_custom_sound_effect.enable=true
+persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable=true
+persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable=true
+
+# Software VSR & VAA (verified in V2361A GameCube.apk; AutoVRS disabled in service.sh)
+sys.game.vsr.pp.enable=1
+sys.game.vaa.gles.enable=1
+sys.game.vaa.vivo.enable=1
+sys.game.vaa.vulkan.enable=1
+
+# Game Touch Optimization (V2361A has ro.vivo.touch.game_para_adjust=1)
+sys.game.touch.opt.enable=1

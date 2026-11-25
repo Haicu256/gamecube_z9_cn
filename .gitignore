@@ -1,0 +1,12 @@
+# Build artifacts & signing keys (NEVER commit private keystores)
+*.zip
+*.jks
+*.keystore
+*.p12
+lsp_src/build/
+lsp_src/release.jks
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db
