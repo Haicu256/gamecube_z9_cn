@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# gamecube_z9(CN)_v1.2 - Config & WebUI backend controller
+# gamecube_z9(CN)_v1.3 - Config & WebUI backend controller
 # Zero background daemon; persists toggles in /data/adb/gamecube_z9.conf
 # Live hardware clock scan + seamless bridge to thermal_killer_z9 when active
 
@@ -9,18 +9,42 @@ TK_DIR="/data/adb/modules/vivo_iqoo_thermal_killer"
 TK_CTL="$TK_DIR/tk_ctl.sh"
 TK_LOCK="$TK_DIR/.daemon.lock"
 TK_FLAG="$TK_DIR/toggle_off"
+TOUCH_DB="/data/user/0/com.vivo.gamecube/databases/support_dimension_list.db"
+TOUCH_DEX="$MODDIR/bin/gc_touch_db.dex"
+TOUCH_ADDED="/data/adb/.gamecube_z9_touch_added"
 
 # Default feature toggles (1=ON, 0=OFF)
 ENABLE_VAA=0
 ENABLE_VSR=0
 ENABLE_AUTOVRS=0
 ENABLE_TOUCH_OPT=1
+ENABLE_TOUCH_PRO=1
+ENABLE_PIC_STABILITY=0
 ENABLE_WALT_LATENCY=1
 ENABLE_GPU_DRIVER=1
 ENABLE_PERF_LIST=1
 ENABLE_AUDIO=1
 ENABLE_BYPASS_CHARGE=1
 ENABLE_FPS_MONSTER=1
+
+run_resetprop() {
+    if command -v resetprop >/dev/null 2>&1; then
+        resetprop "$@" 2>/dev/null
+    elif [ -x /data/adb/ksu/bin/resetprop ]; then
+        /data/adb/ksu/bin/resetprop "$@" 2>/dev/null
+    elif [ -x /data/adb/ksu/bin/ksud ]; then
+        /data/adb/ksu/bin/ksud resetprop "$@" 2>/dev/null
+    fi
+}
+
+fix_touch_db_perms() {
+    for _dbf in "$TOUCH_DB" "${TOUCH_DB}-wal" "${TOUCH_DB}-shm"; do
+        [ -e "$_dbf" ] || continue
+        chown system:system "$_dbf" 2>/dev/null
+        chmod 0660 "$_dbf" 2>/dev/null
+        chcon u:object_r:system_app_data_file:s0 "$_dbf" 2>/dev/null
+    done
+}
 
 load_conf() {
     [ -f "$CONF" ] && . "$CONF" 2>/dev/null
@@ -32,6 +56,8 @@ ENABLE_VAA=$ENABLE_VAA
 ENABLE_VSR=$ENABLE_VSR
 ENABLE_AUTOVRS=$ENABLE_AUTOVRS
 ENABLE_TOUCH_OPT=$ENABLE_TOUCH_OPT
+ENABLE_TOUCH_PRO=$ENABLE_TOUCH_PRO
+ENABLE_PIC_STABILITY=$ENABLE_PIC_STABILITY
 ENABLE_WALT_LATENCY=$ENABLE_WALT_LATENCY
 ENABLE_GPU_DRIVER=$ENABLE_GPU_DRIVER
 ENABLE_PERF_LIST=$ENABLE_PERF_LIST
@@ -51,8 +77,7 @@ collect_games() {
 
     for _val in \
         "$(settings get system pem_ddc_open_game_list 2>/dev/null)" \
-        "$(settings get system vivo_sync_game_switch_status 2>/dev/null)" \
-        "$(settings get global picture_stability_opt_whitelist_apps 2>/dev/null)"; do
+        "$(settings get system vivo_sync_game_switch_status 2>/dev/null)"; do
         [ -z "$_val" ] || [ "$_val" = "null" ] && continue
         _pkgs=$(printf '%s\n' "$_val" | tr ':;,#\\' '\n' | grep -E '^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+){1,}$')
         _raw="$_raw $_pkgs"
@@ -70,68 +95,107 @@ collect_games() {
     printf '%s\n' "$_out"
 }
 
+sync_touch_pro_db() {
+    _games_arg="$1"
+    [ -f "$TOUCH_DB" ] && [ -f "$TOUCH_DEX" ] || return 0
+
+    if [ "$ENABLE_TOUCH_PRO" = "1" ]; then
+        [ -n "$_games_arg" ] || return 0
+        # shellcheck disable=SC2086
+        _res=$(CLASSPATH="$TOUCH_DEX" app_process64 /system/bin GcTouchDb sync "$TOUCH_DB" $_games_arg 2>/dev/null)
+        _added_any=0
+        for _line in $_res; do
+            case "$_line" in
+                ADDED:*)
+                    _apkg=${_line#ADDED:}
+                    _added_any=1
+                    if [ ! -f "$TOUCH_ADDED" ] || ! grep -qx "$_apkg" "$TOUCH_ADDED" 2>/dev/null; then
+                        printf '%s\n' "$_apkg" >> "$TOUCH_ADDED"
+                    fi
+                    ;;
+            esac
+        done
+        [ "$_added_any" = "1" ] && fix_touch_db_perms
+    else
+        if [ -f "$TOUCH_ADDED" ]; then
+            _tracked=$(tr '\n' ' ' < "$TOUCH_ADDED" 2>/dev/null)
+            if [ -n "$_tracked" ]; then
+                # shellcheck disable=SC2086
+                CLASSPATH="$TOUCH_DEX" app_process64 /system/bin GcTouchDb clear "$TOUCH_DB" $_tracked >/dev/null 2>&1
+                fix_touch_db_perms
+            fi
+            rm -f "$TOUCH_ADDED"
+        fi
+    fi
+}
+
 apply_all() {
     load_conf
     [ -f "$CONF" ] || save_conf
 
-    if command -v resetprop >/dev/null 2>&1; then
-        # KPL skin + VivoSync/G2M + Monster+/FPS
-        if [ "$ENABLE_FPS_MONSTER" = "1" ]; then
-            resetprop -n ro.vivo.support_monster_plus true
-            resetprop -n ro.vivo.support_monster_plus_combine true
-            resetprop -n persist.vivo.gamecube.support_fps 1
-            resetprop -n perist.vivo.gamecube.kpl.support 1
-            resetprop -n persist.vivo.gamecube.kpl.support 1
-            resetprop -n persist.sys.supportvivosync 1
-            resetprop -n persist.sys.support.g2m 1
-        else
-            resetprop -n persist.vivo.gamecube.support_fps 0
-        fi
+    # KPL skin + VivoSync/G2M + Monster+/FPS
+    if [ "$ENABLE_FPS_MONSTER" = "1" ]; then
+        run_resetprop -n ro.vivo.support_monster_plus true
+        run_resetprop -n ro.vivo.support_monster_plus_combine true
+        run_resetprop -n persist.vivo.gamecube.support_fps 1
+        run_resetprop -n perist.vivo.gamecube.kpl.support 1
+        run_resetprop -n persist.vivo.gamecube.kpl.support 1
+        run_resetprop -n persist.sys.supportvivosync 1
+        run_resetprop -n persist.sys.support.g2m 1
+    else
+        run_resetprop -n persist.vivo.gamecube.support_fps 0
+    fi
 
-        # Bypass Charging
-        if [ "$ENABLE_BYPASS_CHARGE" = "1" ]; then
-            resetprop -n persist.vivo.game_bypass_charge_support 1
-            resetprop -n persist.vivo.all_bypass_charge_support 1
-        else
-            resetprop -n persist.vivo.game_bypass_charge_support 0
-            resetprop -n persist.vivo.all_bypass_charge_support 0
-        fi
+    # Bypass Charging
+    if [ "$ENABLE_BYPASS_CHARGE" = "1" ]; then
+        run_resetprop -n persist.vivo.game_bypass_charge_support 1
+        run_resetprop -n persist.vivo.all_bypass_charge_support 1
+    else
+        run_resetprop -n persist.vivo.game_bypass_charge_support 0
+        run_resetprop -n persist.vivo.all_bypass_charge_support 0
+    fi
 
-        # Game Audio & Spatializer
-        if [ "$ENABLE_AUDIO" = "1" ]; then
-            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect.enable true
-            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable true
-            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable true
-        else
-            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect.enable false
-            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable false
-            resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable false
-        fi
+    # Game Audio & Spatializer
+    if [ "$ENABLE_AUDIO" = "1" ]; then
+        run_resetprop -n persist.vivo.audio.feature.game_custom_sound_effect.enable true
+        run_resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable true
+        run_resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable true
+    else
+        run_resetprop -n persist.vivo.audio.feature.game_custom_sound_effect.enable false
+        run_resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable false
+        run_resetprop -n persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable false
+    fi
 
-        # VAA (vivo Anti-Aliasing)
-        if [ "$ENABLE_VAA" = "1" ]; then
-            resetprop -n sys.game.vaa.gles.enable 1
-            resetprop -n sys.game.vaa.vivo.enable 1
-            resetprop -n sys.game.vaa.vulkan.enable 1
-        else
-            resetprop -n sys.game.vaa.gles.enable 0
-            resetprop -n sys.game.vaa.vivo.enable 0
-            resetprop -n sys.game.vaa.vulkan.enable 0
-        fi
+    # VAA (vivo Anti-Aliasing)
+    if [ "$ENABLE_VAA" = "1" ]; then
+        run_resetprop -n sys.game.vaa.gles.enable 1
+        run_resetprop -n sys.game.vaa.vivo.enable 1
+        run_resetprop -n sys.game.vaa.vulkan.enable 1
+    else
+        run_resetprop -n sys.game.vaa.gles.enable 0
+        run_resetprop -n sys.game.vaa.vivo.enable 0
+        run_resetprop -n sys.game.vaa.vulkan.enable 0
+    fi
 
-        # VSR (Software Super Resolution post-processing)
-        if [ "$ENABLE_VSR" = "1" ]; then
-            resetprop -n sys.game.vsr.pp.enable 1
-        else
-            resetprop -n sys.game.vsr.pp.enable 0
-        fi
+    # VSR (Software Super Resolution post-processing)
+    if [ "$ENABLE_VSR" = "1" ]; then
+        run_resetprop -n sys.game.vsr.pp.enable 1
+    else
+        run_resetprop -n sys.game.vsr.pp.enable 0
+    fi
 
-        # Game Touch Optimization
-        if [ "$ENABLE_TOUCH_OPT" = "1" ]; then
-            resetprop -n sys.game.touch.opt.enable 1
-        else
-            resetprop -n sys.game.touch.opt.enable 0
-        fi
+    # Game Touch Optimization
+    if [ "$ENABLE_TOUCH_OPT" = "1" ]; then
+        run_resetprop -n sys.game.touch.opt.enable 1
+    else
+        run_resetprop -n sys.game.touch.opt.enable 0
+    fi
+
+    # Pro Touch Parameter Adjustment (default ON)
+    if [ "$ENABLE_TOUCH_PRO" = "1" ]; then
+        run_resetprop -n ro.vivo.touch.game_para_adjust 1
+    else
+        run_resetprop -n ro.vivo.touch.game_para_adjust 0
     fi
 
     # AutoVRS (Variable Rate Shading)
@@ -154,6 +218,24 @@ apply_all() {
     fi
 
     _games=$(collect_games)
+
+    # Sync Game Space games into GameCube touch DB (game_manipulation_touch)
+    sync_touch_pro_db "$_games"
+
+    # Picture Stability (default OFF: adds Game Space games when ON, clears when OFF)
+    if [ "$ENABLE_PIC_STABILITY" = "1" ]; then
+        setprop persist.vivo.support.picture_stability_opt true 2>/dev/null || run_resetprop -n persist.vivo.support.picture_stability_opt true
+        _ps_new=""
+        for _pkg in $_games; do
+            if [ -n "$_ps_new" ]; then _ps_new="${_ps_new};${_pkg}:1"; else _ps_new="${_pkg}:1"; fi
+        done
+        settings put global picture_stability_opt_whitelist_apps "$_ps_new" 2>/dev/null
+        settings put system enabled_picture_stability_optimize "$_ps_new" 2>/dev/null
+    else
+        setprop persist.vivo.support.picture_stability_opt "" 2>/dev/null || run_resetprop -n persist.vivo.support.picture_stability_opt ""
+        settings put global picture_stability_opt_whitelist_apps "" 2>/dev/null
+        settings put system enabled_picture_stability_optimize "" 2>/dev/null
+    fi
 
     # VAA whitelist
     if [ "$ENABLE_VAA" = "1" ] && [ -n "$_games" ]; then
@@ -314,6 +396,8 @@ emit_json() {
     [ "$_vsr_wl" = "null" ] && _vsr_wl=""
     _drv_wl=$(settings get global updatable_driver_prerelease_opt_in_apps 2>/dev/null | tr -d '\r\n"')
     [ "$_drv_wl" = "null" ] && _drv_wl=""
+    _ps_wl=$(settings get global picture_stability_opt_whitelist_apps 2>/dev/null | tr -d '\r\n"')
+    [ "$_ps_wl" = "null" ] && _ps_wl=""
 
     # Live hardware scan for GPU / CPU ceiling locks
     _tk_linked=0
@@ -338,10 +422,10 @@ emit_json() {
         _cpu_locked=1
     fi
 
-    printf '{"version":"v1.2","model":"%s","apkInstalled":%s,"kplFiles":%s,"games":"%s","waltLive":%s,"autovrsLive":%s,"vaaList":"%s","vsrList":"%s","drvList":"%s","tkLinked":%s,"hw":{"gpuLocked":%s,"cpuLocked":%s,"gpuCur":%s,"gpuMax":%s,"p0":%s,"p4":%s,"p7":%s},"cfg":{"ENABLE_VAA":%s,"ENABLE_VSR":%s,"ENABLE_AUTOVRS":%s,"ENABLE_TOUCH_OPT":%s,"ENABLE_WALT_LATENCY":%s,"ENABLE_GPU_DRIVER":%s,"ENABLE_PERF_LIST":%s,"ENABLE_AUDIO":%s,"ENABLE_BYPASS_CHARGE":%s,"ENABLE_FPS_MONSTER":%s,"LOCK_GPU_MAX":%s,"LOCK_CPU_MAX":%s}}\n' \
-        "$_model" "$_apk_ok" "${_kpl_cnt:-0}" "$_games" "$_walt" "$_autovrs" "$_vaa_wl" "$_vsr_wl" "$_drv_wl" \
+    printf '{"version":"v1.3","model":"%s","apkInstalled":%s,"kplFiles":%s,"games":"%s","waltLive":%s,"autovrsLive":%s,"vaaList":"%s","vsrList":"%s","drvList":"%s","picStabList":"%s","tkLinked":%s,"hw":{"gpuLocked":%s,"cpuLocked":%s,"gpuCur":%s,"gpuMax":%s,"p0":%s,"p4":%s,"p7":%s},"cfg":{"ENABLE_VAA":%s,"ENABLE_VSR":%s,"ENABLE_AUTOVRS":%s,"ENABLE_TOUCH_OPT":%s,"ENABLE_TOUCH_PRO":%s,"ENABLE_PIC_STABILITY":%s,"ENABLE_WALT_LATENCY":%s,"ENABLE_GPU_DRIVER":%s,"ENABLE_PERF_LIST":%s,"ENABLE_AUDIO":%s,"ENABLE_BYPASS_CHARGE":%s,"ENABLE_FPS_MONSTER":%s,"LOCK_GPU_MAX":%s,"LOCK_CPU_MAX":%s}}\n' \
+        "$_model" "$_apk_ok" "${_kpl_cnt:-0}" "$_games" "$_walt" "$_autovrs" "$_vaa_wl" "$_vsr_wl" "$_drv_wl" "$_ps_wl" \
         "$_tk_linked" "$_gpu_locked" "$_cpu_locked" "${_gcur:-0}" "${_gmax:-975}" "${_p0c:-0}" "${_p4c:-0}" "${_p7c:-0}" \
-        "$ENABLE_VAA" "$ENABLE_VSR" "$ENABLE_AUTOVRS" "$ENABLE_TOUCH_OPT" "$ENABLE_WALT_LATENCY" \
+        "$ENABLE_VAA" "$ENABLE_VSR" "$ENABLE_AUTOVRS" "$ENABLE_TOUCH_OPT" "$ENABLE_TOUCH_PRO" "$ENABLE_PIC_STABILITY" "$ENABLE_WALT_LATENCY" \
         "$ENABLE_GPU_DRIVER" "$ENABLE_PERF_LIST" "$ENABLE_AUDIO" "$ENABLE_BYPASS_CHARGE" "$ENABLE_FPS_MONSTER" \
         "$_gpu_locked" "$_cpu_locked"
 }
@@ -371,7 +455,7 @@ case "$1" in
                 set_cpu_lock "$_v"
                 emit_json
                 ;;
-            ENABLE_VAA|ENABLE_VSR|ENABLE_AUTOVRS|ENABLE_TOUCH_OPT|ENABLE_WALT_LATENCY|ENABLE_GPU_DRIVER|ENABLE_PERF_LIST|ENABLE_AUDIO|ENABLE_BYPASS_CHARGE|ENABLE_FPS_MONSTER)
+            ENABLE_VAA|ENABLE_VSR|ENABLE_AUTOVRS|ENABLE_TOUCH_OPT|ENABLE_TOUCH_PRO|ENABLE_PIC_STABILITY|ENABLE_WALT_LATENCY|ENABLE_GPU_DRIVER|ENABLE_PERF_LIST|ENABLE_AUDIO|ENABLE_BYPASS_CHARGE|ENABLE_FPS_MONSTER)
                 eval "$_k=$_v"
                 save_conf
                 apply_all
@@ -393,6 +477,8 @@ case "$1" in
         ENABLE_VSR=0
         ENABLE_AUTOVRS=0
         ENABLE_TOUCH_OPT=1
+        ENABLE_TOUCH_PRO=1
+        ENABLE_PIC_STABILITY=0
         ENABLE_WALT_LATENCY=1
         ENABLE_GPU_DRIVER=1
         ENABLE_PERF_LIST=1

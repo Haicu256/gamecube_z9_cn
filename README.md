@@ -1,4 +1,4 @@
-# gamecube_z9(CN)_v1.2
+# gamecube_z9(CN)_v1.3
 
 Pure, zero-bloat **KernelSU (with built-in WebUI) + LSPosed** Game Space module built specifically for **vivo iQOO Z9 CN (`V2361A` / `PD2361` / Snapdragon 7 Gen 3 `SM7550` / OriginOS 5)**.
 
@@ -30,7 +30,8 @@ Module mở khóa toàn diện **Game Space (Siêu trò chơi)** kèm **WebUI b�
   - Mỗi lần mở WebUI, `gc_ctl.sh` quét trực tiếp `/sys` (`min_pwrlevel`, `policy0/4/7 scaling_min_freq`) để hiển thị chính xác trạng thái bật/tắt & xung thực tế.
   - Nếu máy có cài [`thermal_killer_z9_cn`](https://github.com/Haicu256/thermal_killer_z9_cn) đang chạy, công tắc sẽ đồng bộ trực tiếp qua `tk_ctl.sh` (0 xung đột, 0 tiến trình nền thêm, vẫn được `temp_guard` bảo vệ); nếu dùng độc lập thì ghi/khôi phục trực tiếp `/sys`.
 - **VAA / VSR mềm & AutoVRS (tích hợp công tắc WebUI):** Mặc định **TẮT** cả VAA, VSR và AutoVRS để GPU nhẹ tải và hình sắc nét tự nhiên nhất; có thể bật/tắt tức thì bất cứ lúc nào trong **WebUI của KernelSU**.
-- **Tối ưu cảm ứng game:** Bật `sys.game.touch.opt.enable=1` (tận dụng `ro.vivo.touch.game_para_adjust=1` có sẵn trên máy).
+- **Tối ưu cảm ứng game & Cảm ứng Game chuyên sâu (`ENABLE_TOUCH_PRO`, mặc định BẬT):** Bật `sys.game.touch.opt.enable=1` + `ro.vivo.touch.game_para_adjust=1` và tự động chèn mọi game trong Game Space vào bảng `game_dimen` (`game_manipulation_touch`, `channel='*'`) trong `support_dimension_list.db` bằng helper `bin/gc_touch_db.dex` (`3.7 KB`, dùng `SQLiteDatabase` gốc qua `app_process64`) để các game VN/quốc tế hiện đủ 3 thanh trượt độ nhạy cảm ứng.
+- **Ổn định hình ảnh — Tắt lọc VSR/VAA/MEMC (`ENABLE_PIC_STABILITY`, mặc định TẮT):** Khi gạt bật trong WebUI sẽ bật `persist.vivo.support.picture_stability_opt=true` và thêm mọi game Game Space vào `picture_stability_opt_whitelist_apps` & `enabled_picture_stability_optimize` (`*#*#669#*#*`); khi tắt sẽ xóa sạch danh sách. Đồng bộ khóa 2 chiều với [`originos5-hidden-features`](https://github.com/Haicu256/originos5-hidden-features) `v2.2.0`.
 - **Scheduler WALT ưu tiên độ trễ:** Bật `/dev/cpuctl/top-app/cpu.uclamp.latency_sensitive = 1` (tăng độ mượt 1% low FPS mà không khóa xung khi nghỉ).
 - **Adreno GPU Tuner:** Bật `GPUTUNER_SWITCH=true`.
 - **Tự động đồng bộ mọi game bạn thêm vào Game Space** (đọc trực tiếp qua ContentProvider chính chủ `content://com.vivo.gamecube.provider/support_game`, không cần `sqlite3`):
@@ -53,9 +54,9 @@ Module mở khóa toàn diện **Game Space (Siêu trò chơi)** kèm **WebUI b�
 
 ### 3. Hướng dẫn cài đặt & sử dụng
 1. Gỡ các module/APK Game Space cũ nếu có (tránh trùng hook vào `com.vivo.gamecube`).
-2. Tải **`gamecube_z9(CN)_v1.2.zip`** trong mục [Releases](https://github.com/Haicu256/gamecube_z9_cn/releases/latest) và flash trong **KernelSU Manager** → **Soft Reboot**.
+2. Tải **`gamecube_z9(CN)_v1.3.zip`** trong mục [Releases](https://github.com/Haicu256/gamecube_z9_cn/releases/latest) và flash trong **KernelSU Manager** → **Soft Reboot**.
 3. Mở **LSPosed Manager → Mô-đun → bật `GameCube Z9 Monster+`** (scope: **`com.vivo.gamecube`**) → buộc dừng `GameCube` (hoặc Soft Reboot thêm 1 lần).
-4. **Tùy chỉnh & đồng bộ Game Space:** Mở **KernelSU Manager → `gamecube_z9(CN)_v1.2` → Mở (WebUI)** để bật/tắt từng tính năng, đồng bộ game mới hoặc bật/tắt khóa trần GPU/CPU đồng bộ trực tiếp với `thermal_killer_z9`.
+4. **Tùy chỉnh & đồng bộ Game Space:** Mở **KernelSU Manager → `gamecube_z9(CN)_v1.3` → Mở (WebUI)** để bật/tắt từng tính năng, đồng bộ game mới hoặc bật/tắt khóa trần GPU/CPU đồng bộ trực tiếp với `thermal_killer_z9`.
 5. **Gỡ bỏ:** Gỡ module trong KernelSU Manager → `uninstall.sh` tự gỡ APK `GameCube Z9 Monster+`, trả lại `perf_game_list`, `updatable_driver_prerelease_opt_in_apps`, `autovrs_support`, `WALT latency_sensitive` và xóa sạch các prop đã thêm.
 
 ---

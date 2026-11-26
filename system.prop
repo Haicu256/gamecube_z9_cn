@@ -30,5 +30,6 @@ sys.game.vaa.gles.enable=0
 sys.game.vaa.vivo.enable=0
 sys.game.vaa.vulkan.enable=0
 
-# Game Touch Optimization (V2361A has ro.vivo.touch.game_para_adjust=1)
+# Game Touch Optimization & Pro Touch Parameter Adjustment (ON by default)
 sys.game.touch.opt.enable=1
+ro.vivo.touch.game_para_adjust=1

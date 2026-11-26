@@ -1,5 +1,10 @@
 #!/system/bin/sh
-# gamecube_z9(CN)_v1.0 - Khôi phục sạch cài đặt khi gỡ module
+# gamecube_z9(CN)_v1.3 - Khôi phục sạch cài đặt khi gỡ module
+
+MODDIR="${0%/*}"
+TOUCH_DB="/data/user/0/com.vivo.gamecube/databases/support_dimension_list.db"
+TOUCH_DEX="$MODDIR/bin/gc_touch_db.dex"
+TOUCH_ADDED="/data/adb/.gamecube_z9_touch_added"
 
 if command -v resetprop >/dev/null 2>&1; then
     for _p in \
@@ -9,13 +14,30 @@ if command -v resetprop >/dev/null 2>&1; then
         persist.vivo.all_bypass_charge_support \
         persist.sys.supportvivosync \
         persist.sys.support.g2m \
+        persist.vivo.support.picture_stability_opt \
         persist.vivo.audio.feature.game_custom_sound_effect.enable \
         persist.vivo.audio.feature.game_custom_sound_effect_enhancement.enable \
         persist.vivo.audio.feature.game_custom_sound_effect_spatializer.enable; do
         resetprop --delete "$_p" 2>/dev/null
     done
     resetprop -n sys.game.touch.opt.enable 0 2>/dev/null
+    resetprop -n ro.vivo.touch.game_para_adjust 0 2>/dev/null
 fi
+
+if [ -f "$TOUCH_DB" ] && [ -f "$TOUCH_DEX" ] && [ -f "$TOUCH_ADDED" ]; then
+    _tracked=$(tr '\n' ' ' < "$TOUCH_ADDED" 2>/dev/null)
+    if [ -n "$_tracked" ]; then
+        # shellcheck disable=SC2086
+        CLASSPATH="$TOUCH_DEX" app_process64 /system/bin GcTouchDb clear "$TOUCH_DB" $_tracked >/dev/null 2>&1
+        for _dbf in "$TOUCH_DB" "${TOUCH_DB}-wal" "${TOUCH_DB}-shm"; do
+            [ -e "$_dbf" ] || continue
+            chown system:system "$_dbf" 2>/dev/null
+            chmod 0660 "$_dbf" 2>/dev/null
+            chcon u:object_r:system_app_data_file:s0 "$_dbf" 2>/dev/null
+        done
+    fi
+fi
+rm -f "$TOUCH_ADDED"
 
 if [ -f /data/adb/.gamecube_z9_perf_game_list.bak ]; then
     _orig_perf=$(cat /data/adb/.gamecube_z9_perf_game_list.bak 2>/dev/null)
@@ -45,4 +67,6 @@ fi
 settings delete secure autovrs_support 2>/dev/null
 settings put global vaa_whitelist_apps "" 2>/dev/null
 settings put global vsr_whitelist_apps "" 2>/dev/null
+settings put global picture_stability_opt_whitelist_apps "" 2>/dev/null
+settings put system enabled_picture_stability_optimize "" 2>/dev/null
 exit 0

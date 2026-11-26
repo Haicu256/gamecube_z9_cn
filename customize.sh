@@ -1,8 +1,8 @@
 #!/system/bin/sh
-# gamecube_z9(CN)_v1.0 - KernelSU installer hook
+# gamecube_z9(CN)_v1.3 - KernelSU installer hook
 
 ui_print "========================================="
-ui_print "   gamecube_z9(CN)_v1.0 (iQOO Z9 CN)     "
+ui_print "   gamecube_z9(CN)_v1.3 (iQOO Z9 CN)     "
 ui_print "========================================="
 
 APK="$MODPATH/apk/GameCubeZ9MonsterPlus.apk"
@@ -22,3 +22,4 @@ set_perm "$MODPATH/gc_ctl.sh" 0 0 0755
 set_perm "$MODPATH/service.sh" 0 0 0755
 set_perm "$MODPATH/action.sh" 0 0 0755
 set_perm "$MODPATH/uninstall.sh" 0 0 0755
+[ -f "$MODPATH/bin/gc_touch_db.dex" ] && set_perm "$MODPATH/bin/gc_touch_db.dex" 0 0 0644

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>GameCube Z9 CN v1.2</title>
+<title>GameCube Z9 CN v1.3</title>
 <style>
   :root {
     --bg: #0d1017;
@@ -244,7 +244,7 @@
 <body>
   <div class="header">
     <div class="title">GameCube Z9 CN</div>
-    <span class="badge" id="verBadge">v1.2</span>
+    <span class="badge" id="verBadge">v1.3</span>
   </div>
 
   <div class="card">
@@ -300,7 +300,7 @@
 
   <div class="note">
     0 tiến trình chạy ngầm · An toàn với thermal_killer_z9<br />
-    Mẹo: Một số thay đổi prop cần bấm "Khởi động lại GameCube" để giao diện cập nhật.
+    Mẹo: Một số thay đổi prop/DB cần bấm "Khởi động lại GameCube" để giao diện cập nhật.
   </div>
 
   <div id="toast"></div>
@@ -322,10 +322,12 @@
     { key: "ENABLE_VAA", name: "VAA (Khử răng cưa vivo)", desc: "Làm mịn viền game qua GLES/Vulkan. Tắt để giảm nhẹ tải GPU." },
     { key: "ENABLE_VSR", name: "VSR (Siêu độ phân giải mềm)", desc: "Làm nét hậu kỳ khung hình 720p. Tắt để GPU nhẹ tải tối đa." },
     { key: "ENABLE_AUTOVRS", name: "AutoVRS (Giảm nét rìa GPU)", desc: "Khuyên TẮT: tiết kiệm GPU nhẹ nhưng hay làm mờ vùng rìa hình." },
+    { key: "ENABLE_PIC_STABILITY", name: "Ổn định hình ảnh (Tắt lọc VSR/VAA/MEMC)", desc: "Mặc định TẮT: bật để thêm các game Game Space vào danh sách *#*#669#*#* (tắt bộ lọc đồ họa chống lỗi hình); tắt sẽ xóa sạch danh sách." },
     { key: "ENABLE_GPU_DRIVER", name: "GPU Tuner + Driver Prerelease", desc: "Dùng driver đồ họa game chính hãng Qualcomm (/vendor) cho mọi game." },
     { key: "ENABLE_PERF_LIST", name: "Đồng bộ perf_game_list", desc: "Đưa game VN/quốc tế trong Game Space vào danh sách hiệu năng ROM CN." },
     { key: "ENABLE_WALT_LATENCY", name: "WALT Latency (Ưu tiên độ trễ)", desc: "Giảm khựng 1% low FPS trên CPU mà không khóa xung khi nghỉ." },
-    { key: "ENABLE_TOUCH_OPT", name: "Touch Opt (Tối ưu cảm ứng)", desc: "Bật sys.game.touch.opt.enable tinh chỉnh độ nhạy cảm ứng game." }
+    { key: "ENABLE_TOUCH_OPT", name: "Touch Opt (Tối ưu cảm ứng)", desc: "Bật sys.game.touch.opt.enable tinh chỉnh độ nhạy cảm ứng game." },
+    { key: "ENABLE_TOUCH_PRO", name: "Cảm ứng Game chuyên sâu (Game Space)", desc: "Mặc định BẬT: mở ro.vivo.touch.game_para_adjust=1 và tự thêm mọi game trong Game Space vào danh sách hỗ trợ cảm ứng (Cài đặt › Chế độ siêu trò chơi › Cài đặt điều khiển)." }
   ];
 
   var SPACE_ITEMS = [
@@ -422,7 +424,7 @@
 
   function applyState(data) {
     if (!data || !data.cfg) return;
-    document.getElementById("verBadge").textContent = data.version || "v1.2";
+    document.getElementById("verBadge").textContent = data.version || "v1.3";
     document.getElementById("stModel").textContent = data.model || "V2361A";
     var apkEl = document.getElementById("stApk");
     apkEl.textContent = data.apkInstalled ? "Đã cài" : "Chưa cài";
